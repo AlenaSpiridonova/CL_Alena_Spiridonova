@@ -1,0 +1,227 @@
+---
+title: "R Project"
+author: "Alena Spiridonova"
+date: "27 03 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+
+Используемый датасет: пакет данных *heights* из библиотеки *modelr*.
+
+<font size="3">**Format**</font>
+
+**income**  
+Yearly income. The top two percent of values were averaged and that average was used to replace all values in the top range.*
+
+**height**  
+Height, in inches
+
+**weight**  
+Weight, in pounds
+
+**age**  
+Age, in years, between 47 and 56.
+
+**marital**  
+Marital status
+
+**sex**  
+Sex
+
+**education**  
+Years of education
+
+**afqt**  
+Percentile score on Armed Forces Qualification Test.
+
+Details  
+This contains data as at 2012.
+
+
+```{r}
+library("tidyverse")
+library("modelr")
+library("nortest")
+library("DT")
+library("ggplot2")
+library("hrbrthemes")
+heights <- heights %>%
+  mutate(height = 2.54 * height, # переводим рост и вес в более привычные единицы измерения
+         weight = 0.45359237 * weight)
+DT::datatable(heights)
+```
+
+## Исследовательский вопрос
+
+<p style="font-family: times, serif; font-size:11pt; font-style:italic">
+    Имеется ли связь (корреляция) между ростом и доходом людей?
+</p>
+
+**Нулевая гипотеза:** связь между ростом и доходом отсутствует.
+
+**Альтернативная гипотеза:** между ростом и доходом людей есть связь.
+
+
+
+Оценим доход визуально с помощью гистограммы:
+
+
+```{r}
+Income <- heights$income
+hist(Income, col = "light green", breaks = 7)
+```
+
+Проверим данные на нормальность распределения
+
+
+```{r}
+heights <- as_tibble(heights)
+shapiro.test(heights$income[0:5000])
+ad.test(heights$income)$p.value # всю выборку можно проверить с помощью теста Андерсона-Дарлинга
+
+```
+
+
+Поскольку p-value меньше уровня α, который стандартно равен 0,05, то мы можем 
+отвергнуть нулевую гипотезу о том, что выборка взята из нормального распределения.
+
+
+Проведем проверку данных на ковариацию
+
+
+```{r}
+heights %>%
+  drop_na() %>%
+  select(income, height) %>%
+  cov()
+```
+
+
+Ковариация положительная, то есть чем больше одна переменная, тем больше другая переменная.
+
+
+
+Проведем проверку данных на корреляцию
+
+
+```{r}
+heights %>%
+  drop_na() %>%
+  select(income, height) %>%
+  cor()
+```
+
+
+
+Связь есть, но не очень большая (скорее ближе к 0, чем к 1).
+
+
+
+**Диаграмма рассеяния**
+
+```{r}
+ggplot(heights, aes(x=income, y=height, size=2, color=sex)) + 
+    geom_point(alpha=.35, size=6) +
+    theme_ipsum() + 
+    labs(title = "Income-Height Scatterplot")
+```
+
+
+
+Насколько неслучайна эта корреляция? Протестируем уровень значимости нулевой 
+гипотезы: корреляция этих двух величин в генеральной совокупности равна 0. Альтернативная гипотеза: между этими величинами есть какая-то связь.
+
+
+
+```{r}
+# для большей уверенности также проведем тест Спирмена
+cor.test(heights$income, heights$height)
+cor.test(heights$income, heights$height, method = "spearman")
+```
+
+
+
+По результатам первого теста мы можем отклонить нулевую гипотезу.
+По результатам теста Спирмена незначительно различается только значение 
+корреляции.
+
+
+
+
+**Предположение:** наличие корреляции объясняется разницей в росте мужчин и женщин и традиционной разницей в размере их заработка.
+
+
+
+**Средний доход по каждому полу**
+
+
+
+```{r}
+heights %>%
+  group_by(sex) %>%
+  summarise(across(c(income), mean, na.rm = TRUE))
+```
+
+
+
+**Средний рост по каждому полу**
+
+
+
+```{r}
+heights %>%
+  group_by(sex) %>%
+  summarise(across(c(height), mean, na.rm = TRUE))
+```
+
+
+
+**Посчитаем, сколько в наших данных мужчин и женщин**
+
+
+
+```{r}
+heights %>%
+  count(sex, sort = TRUE)
+```
+
+```{r}
+ggplot(data = heights) +
+  geom_bar(aes(x = "", fill = sex), width = .2)
+```
+
+
+
+**В отдельно взятых группах М и Ж значение коэффициента корреляции между **
+**ростом и доходом ниже, чем в смешанной группе, в 2 и 3 раза соответственно**
+
+
+
+```{r}
+income_height_sex <- heights %>% # проверка на кореляцию между ростом и доходом отдельно для М и Ж
+  drop_na() %>%
+  select(income, height, sex)
+
+male <- income_height_sex %>%
+  filter(sex == "male")
+cor(male$income, male$height)
+
+female <- income_height_sex %>%
+  filter(sex == "female")
+cor(female$income, female$height)
+```
+
+
+
+**Результаты исследования:**
+
+
+
+между ростом и доходом людей наблюдается корреляция, что, возможно, объясняется разницей в росте мужчин и женщин и традиционной разницей в размере их заработной платы.
+
+
+
